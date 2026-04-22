@@ -1,0 +1,25 @@
+/// BLE MESH INITIALIZATION SNIPPET
+/// Copy and paste this snippet into your main.dart or anywhere you want to launch the mesh.
+/// This fulfills the instruction to leave all existing code untouched.
+
+import 'package:zeronet/mesh/mesh_foreground_service.dart';
+import 'package:zeronet/mesh/mesh_service.dart';
+
+void launchMeshFeature() async {
+  // 1. Initialize the foreground service configurations (e.g. inside main() before runApp)
+  await MeshForegroundService.initializeService();
+  
+  // 2. Start the foreground service which spins up the BLE mesh network isolated from the main UI
+  await MeshForegroundService.start();
+}
+
+void triggerMeshSOSRequest() {
+  // 3. To broadcast a message across the mesh network dynamically (e.g. from a UI SOS button press):
+  MeshService().broadcastNewMessage(
+    "EMERGENCY: User Needs Assistance at Current Sector", 
+    startingTtl: 3 // Set hop count limit to 3 to traverse maximum ~60-90 meters seamlessly via peer relays
+  );
+}
+
+// To completely shutdown the background mesh radio relay:
+// MeshForegroundService.stop();

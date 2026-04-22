@@ -6,6 +6,24 @@
 
 #include "generated_plugin_registrant.h"
 
+#include <battery_plus/battery_plus_windows_plugin.h>
+#include <connectivity_plus/connectivity_plus_windows_plugin.h>
+#include <flutter_ble_peripheral/flutter_ble_peripheral_plugin_c_api.h>
+#include <flutter_blue_plus_winrt/flutter_blue_plus_plugin.h>
+#include <geolocator_windows/geolocator_windows.h>
+#include <permission_handler_windows/permission_handler_windows_plugin.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
+  BatteryPlusWindowsPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("BatteryPlusWindowsPlugin"));
+  ConnectivityPlusWindowsPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("ConnectivityPlusWindowsPlugin"));
+  FlutterBlePeripheralPluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterBlePeripheralPluginCApi"));
+  FlutterBluePlusPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("FlutterBluePlusPlugin"));
+  GeolocatorWindowsRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("GeolocatorWindows"));
+  PermissionHandlerWindowsPluginRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("PermissionHandlerWindowsPlugin"));
 }

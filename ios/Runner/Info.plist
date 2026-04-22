@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Zeronet needs location access to pinpoint incidents.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Zeronet uses Bluetooth to detect peers and form a mesh network.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Zeronet uses Bluetooth to detect peers and form a mesh network.</string>
 </dict>
 </plist>
