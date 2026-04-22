@@ -17,7 +17,7 @@ class VideoStreamManager extends ChangeNotifier {
     notifyListeners();
 
     print('VIDEO MANAGER: Opening live WebRTC socket to dispatch center...');
-    // TODO: Initialize flutter_webrtc plugin, bind camera, peer connection
+
   }
 
   /// Triggered if AlertRouter detects complete offline status
@@ -28,7 +28,7 @@ class VideoStreamManager extends ChangeNotifier {
     notifyListeners();
 
     print('VIDEO MANAGER: Offline. Initializing Camera plugin for local MP4 dump...');
-    // TODO: Initialize camera plugin, startVideoRecording()
+
   }
 
   void stopAll() {

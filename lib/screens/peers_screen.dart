@@ -1,41 +1,17 @@
 import 'package:flutter/material.dart';
-import '../models/peer_node.dart';
+import 'package:provider/provider.dart';
+import '../services/sensor_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/peer_card.dart';
+import '../widgets/mesh_graph.dart';
 
 class PeersScreen extends StatelessWidget {
   const PeersScreen({super.key});
 
-  List<PeerNode> get _demoPeers => const [
-        PeerNode(
-          id: 'a4',
-          name: 'NODE–A4',
-          status: PeerStatus.online,
-          lastSeen: 'Just now',
-          distanceMeters: 4,
-          signalBars: 4,
-        ),
-        PeerNode(
-          id: 'b7',
-          name: 'NODE–B7',
-          status: PeerStatus.online,
-          lastSeen: '2s ago',
-          distanceMeters: 12,
-          signalBars: 3,
-        ),
-        PeerNode(
-          id: 'c1',
-          name: 'NODE–C1',
-          status: PeerStatus.warning,
-          lastSeen: '5s ago',
-          distanceMeters: 28,
-          signalBars: 2,
-        ),
-      ];
-
   @override
   Widget build(BuildContext context) {
-    final peers = _demoPeers;
+    final sensorService = context.watch<SensorService>();
+    final peers = sensorService.peers;
 
     return Scaffold(
       backgroundColor: ZeronetColors.background,
@@ -94,7 +70,10 @@ class PeersScreen extends StatelessWidget {
                       ),
                     ),
                     child: IconButton(
-                      onPressed: () {},
+                      onPressed: () {
+                        context.read<SensorService>().stopMonitoring();
+                        context.read<SensorService>().startMonitoring();
+                      },
                       icon: Icon(
                         Icons.refresh_rounded,
                         color: ZeronetColors.primary,
@@ -104,7 +83,12 @@ class PeersScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              // Graph Visualization
+              Center(
+                child: MeshGraph(peers: peers, size: 220),
+              ),
+              const SizedBox(height: 12),
               // Status card
               Container(
                 width: double.infinity,

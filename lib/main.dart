@@ -54,7 +54,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   int _currentIndex = 0;
 
-  final _screens = const [
+  final List<Widget> _screens = const [
     HomeScreen(),
     IncidentHistoryScreen(),
     PeersScreen(),

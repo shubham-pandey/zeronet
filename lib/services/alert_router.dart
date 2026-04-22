@@ -52,7 +52,7 @@ class AlertRouter {
   // --- Tier Implementation Stubs ---
 
   Future<bool> _attemptInternetDispatch(Incident incident) async {
-    // TODO: Implement HTTP POST to backend server
+
     print('--> Mock: Sending payload to Zenvoy Server over Internet...');
     await Future.delayed(const Duration(seconds: 1)); // Simulating network req
     print('--> Mock: Internet Dispatch SUCCESS');

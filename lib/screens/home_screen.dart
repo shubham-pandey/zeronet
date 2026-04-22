@@ -5,6 +5,7 @@ import '../widgets/pulse_ring.dart';
 import '../widgets/sos_button.dart';
 import '../services/sensor_service.dart';
 import '../models/incident.dart';
+import '../models/peer_node.dart';
 import 'crash_detected_screen.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -69,6 +70,102 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  void _showPeersBottomSheet(BuildContext context, SensorService sensorService) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ZeronetColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.bluetooth, color: ZeronetColors.primary),
+                const SizedBox(width: 12),
+                Text(
+                  'NEARBY MESH DEVICES',
+                  style: ZeronetTheme.textTheme.titleLarge?.copyWith(
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${sensorService.blePeerCount}',
+                  style: ZeronetTheme.mono.copyWith(
+                    fontSize: 24,
+                    color: ZeronetColors.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Devices within 30-80m range are acting as relays. Your signals will securely hop through these nodes.',
+              style: TextStyle(color: ZeronetColors.textSecondary, height: 1.4),
+            ),
+            const SizedBox(height: 24),
+            if (sensorService.peers.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 20.0),
+                  child: Text('Scanning for nearby relays...', style: TextStyle(color: ZeronetColors.textTertiary)),
+                ),
+              )
+            else
+              Container(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.3),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: sensorService.peers.length,
+                  itemBuilder: (context, index) {
+                    final peer = sensorService.peers[index];
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: CircleAvatar(
+                        backgroundColor: ZeronetColors.surfaceLight,
+                        child: Icon(Icons.router_rounded, color: ZeronetColors.primary, size: 20),
+                      ),
+                      title: Text(peer.name, style: ZeronetTheme.mono.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
+                      subtitle: Text('${peer.distanceMeters}m away • ${peer.signalBars}/4 bars', style: TextStyle(fontSize: 12, color: ZeronetColors.textTertiary)),
+                      trailing: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: peer.status == PeerStatus.online ? ZeronetColors.success : ZeronetColors.warning,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ZeronetColors.surfaceLight,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('CLOSE'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildTopBar(BuildContext context, SensorService sensorService) {
     return Row(
       children: [
@@ -125,7 +222,7 @@ class HomeScreen extends StatelessWidget {
         // BLE peers
         GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => _showDetailDialog(context, 'Bluetooth LE Mesh', '${sensorService.blePeerCount} active peers discovered nearby.\n\nThe offline relay loop shares incident broadcasts automatically to devices within 30-80 meters.'),
+          onTap: () => _showPeersBottomSheet(context, sensorService),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
             child: Row(

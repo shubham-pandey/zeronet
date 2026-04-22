@@ -9,6 +9,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/incident.dart';
+import '../models/peer_node.dart';
 import 'detection_engine.dart';
 import 'alert_router.dart';
 
@@ -67,8 +68,10 @@ class SensorService extends ChangeNotifier {
   TransmissionMode _currentMode = TransmissionMode.offlineCached;
   TransmissionMode get currentMode => _currentMode;
 
-  int _blePeerCount = 0;
-  int get blePeerCount => _blePeerCount;
+  List<PeerNode> _peers = [];
+  List<PeerNode> get peers => _peers;
+
+  int get blePeerCount => _peers.length;
 
   int _signalBars = 0;
   int get signalBars => _signalBars;
@@ -84,6 +87,17 @@ class SensorService extends ChangeNotifier {
   StreamSubscription<List<ScanResult>>? _scanSub;
   
   final Battery _battery = Battery();
+
+  String _formatLocationLabel(double latitude, double longitude, Placemark place) {
+    final label = '${place.name}, ${place.locality}'.trim();
+    if (label.startsWith(',')) {
+      return label.substring(1).trimLeft();
+    }
+    if (label.isNotEmpty) {
+      return label;
+    }
+    return 'Lat: ${latitude.toStringAsFixed(2)}, Lng: ${longitude.toStringAsFixed(2)}';
+  }
   
   Future<void> initialize() async {
     // Check initial battery
@@ -134,10 +148,7 @@ class SensorService extends ChangeNotifier {
           List<Placemark> placemarks = await placemarkFromCoordinates(_latitude, _longitude);
           if (placemarks.isNotEmpty) {
             Placemark place = placemarks.first;
-            _lastLocation = '${place.name}, ${place.locality}'.trim().replaceAll(RegExp(r'^,\s*'), '');
-            if (_lastLocation.isEmpty) {
-               _lastLocation = 'Lat: ${_latitude.toStringAsFixed(2)}, Lng: ${_longitude.toStringAsFixed(2)}';
-            }
+            _lastLocation = _formatLocationLabel(_latitude, _longitude, place);
           }
         } catch (e) {
           _lastLocation = 'Lat: ${_latitude.toStringAsFixed(2)}, Lng: ${_longitude.toStringAsFixed(2)}';
@@ -164,10 +175,7 @@ class SensorService extends ChangeNotifier {
           List<Placemark> placemarks = await placemarkFromCoordinates(_latitude, _longitude);
           if (placemarks.isNotEmpty) {
             Placemark place = placemarks.first;
-            _lastLocation = '${place.name}, ${place.locality}'.trim().replaceAll(RegExp(r'^,\s*'), '');
-            if (_lastLocation.isEmpty) {
-               _lastLocation = 'Lat: ${_latitude.toStringAsFixed(2)}, Lng: ${_longitude.toStringAsFixed(2)}';
-            }
+            _lastLocation = _formatLocationLabel(_latitude, _longitude, place);
           }
         } catch (e) {
           _lastLocation = 'Lat: ${_latitude.toStringAsFixed(2)}, Lng: ${_longitude.toStringAsFixed(2)}';
@@ -188,21 +196,51 @@ class SensorService extends ChangeNotifier {
     _connectivitySub = Connectivity().onConnectivityChanged.listen(_updateConnectivity);
 
     // Bluetooth
-    // Stop any existing scan
     if (FlutterBluePlus.isScanningNow) {
       await FlutterBluePlus.stopScan();
     }
     
-    // Scan periodically or continuously to update peer count
     try {
       _scanSub = FlutterBluePlus.onScanResults.listen((results) {
-        // Counting unique devices
-        _blePeerCount = results.length;
+        _peers = results.map((r) {
+          // Determine status based on signal strength (RSSI)
+          PeerStatus status = PeerStatus.online;
+          if (r.rssi < -80) {
+            status = PeerStatus.warning;
+          }
+          
+          // Estimate distance (simple logic: -30 to -100 dBm map to 1-100m)
+          int distance = (r.rssi.abs() - 30).clamp(1, 100);
+          
+          // Map RSSI to signal bars (1-4)
+          int bars = 1;
+          if (r.rssi > -60) {
+            bars = 4;
+          } else if (r.rssi > -75) {
+            bars = 3;
+          } else if (r.rssi > -90) {
+            bars = 2;
+          }
+
+          String deviceName = r.device.platformName.isNotEmpty 
+              ? r.device.platformName 
+              : 'NODE-${r.device.remoteId.toString().substring(0, 4)}';
+
+          return PeerNode(
+            id: r.device.remoteId.toString(),
+            name: deviceName.toUpperCase(),
+            status: status,
+            lastSeen: 'Just now',
+            distanceMeters: distance,
+            signalBars: bars,
+          );
+        }).toList();
+        
         notifyListeners();
       });
-      await FlutterBluePlus.startScan();
+      await FlutterBluePlus.startScan(timeout: const Duration(minutes: 5));
     } catch (e) {
-      // Bluetooth might be off or permission denied
+      debugPrint("BT Scan Error: $e");
     }
   }
 
