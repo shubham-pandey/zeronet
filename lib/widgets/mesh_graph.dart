@@ -4,11 +4,13 @@ import '../models/peer_node.dart';
 import '../theme/app_theme.dart';
 
 class MeshGraph extends StatefulWidget {
+  final PeerNode currentDevice;
   final List<PeerNode> peers;
   final double size;
 
   const MeshGraph({
     super.key,
+    required this.currentDevice,
     required this.peers,
     this.size = 300,
   });
@@ -43,6 +45,7 @@ class _MeshGraphState extends State<MeshGraph> with SingleTickerProviderStateMix
         return CustomPaint(
           size: Size(widget.size, widget.size),
           painter: GraphPainter(
+            currentDevice: widget.currentDevice,
             peers: widget.peers,
             rotation: _controller.value * 2 * math.pi,
             pulse: (math.sin(_controller.value * 2 * math.pi * 2) + 1) / 2,
@@ -54,11 +57,13 @@ class _MeshGraphState extends State<MeshGraph> with SingleTickerProviderStateMix
 }
 
 class GraphPainter extends CustomPainter {
+  final PeerNode currentDevice;
   final List<PeerNode> peers;
   final double rotation;
   final double pulse;
 
   GraphPainter({
+    required this.currentDevice,
     required this.peers,
     required this.rotation,
     required this.pulse,
@@ -92,14 +97,36 @@ class GraphPainter extends CustomPainter {
 
     // Draw central node (User)
     final nodePaint = Paint()
-      ..color = ZeronetColors.primary
+      ..color = currentDevice.canRelayToInternet
+          ? ZeronetColors.success
+          : ZeronetColors.primary
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(center, 8, nodePaint);
     canvas.drawCircle(
       center, 
       8 + (10 * pulse), 
-      Paint()..color = ZeronetColors.primary.withValues(alpha: 0.2 * (1 - pulse))..style = PaintingStyle.fill
+      Paint()
+        ..color = (currentDevice.canRelayToInternet ? ZeronetColors.success : ZeronetColors.primary)
+            .withValues(alpha: 0.2 * (1 - pulse))
+        ..style = PaintingStyle.fill
+    );
+
+    final centerLabel = TextPainter(
+      text: TextSpan(
+        text: currentDevice.canRelayToInternet ? 'YOU • ONLINE' : 'YOU',
+        style: ZeronetTheme.mono.copyWith(
+          fontSize: 9,
+          color: ZeronetColors.textPrimary,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    centerLabel.layout();
+    centerLabel.paint(
+      canvas,
+      center + Offset(-(centerLabel.width / 2), radius * 0.18),
     );
 
     if (peers.isEmpty) return;
@@ -141,18 +168,34 @@ class GraphPainter extends CustomPainter {
     // Draw peer nodes
     for (var i = 0; i < positions.length; i++) {
         final peer = peers[i];
-        final pColor = peer.status == PeerStatus.online ? ZeronetColors.success : ZeronetColors.warning;
+        final pColor = peer.isPreferredRoute
+            ? ZeronetColors.primary
+            : peer.canRelayToInternet
+                ? ZeronetColors.success
+                : (peer.status == PeerStatus.online
+                    ? ZeronetColors.success
+                    : ZeronetColors.warning);
         
         final pPaint = Paint()
           ..color = pColor
           ..style = PaintingStyle.fill;
 
         canvas.drawCircle(positions[i], 5, pPaint);
+        if (peer.canRelayToInternet) {
+          canvas.drawCircle(
+            positions[i],
+            8,
+            Paint()
+              ..color = pColor.withValues(alpha: 0.18)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 1.5,
+          );
+        }
         
         // Node label highlight
         final textPainter = TextPainter(
           text: TextSpan(
-            text: peer.name.split('-').last,
+            text: peer.isPreferredRoute ? '${peer.name.split('-').last}*' : peer.name.split('-').last,
             style: ZeronetTheme.mono.copyWith(fontSize: 8, color: ZeronetColors.textSecondary, fontWeight: FontWeight.bold),
           ),
           textDirection: TextDirection.ltr,

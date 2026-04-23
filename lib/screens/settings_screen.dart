@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../config/emergency_dispatch_config.dart';
 import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -12,6 +13,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _crashThreshold = 0.5; // 0=Low, 0.5=Medium, 1=High
   bool _bleMeshActive = true;
   bool _satelliteFallback = false;
+  bool get _dispatchConfigured => EmergencyDispatchConfig.isConfigured;
 
   String get _thresholdLabel {
     if (_crashThreshold < 0.33) return 'LOW';
@@ -116,6 +118,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     _contactRow(
                       name: 'Add Contact 3',
                       filled: false,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // ─── Emergency Backend ───
+              _sectionHeader('EMERGENCY BACKEND'),
+              const SizedBox(height: 12),
+              Container(
+                decoration: _cardDecoration(),
+                child: Column(
+                  children: [
+                    _toggleRow(
+                      icon: _dispatchConfigured
+                          ? Icons.cloud_done_rounded
+                          : Icons.cloud_off_rounded,
+                      iconColor: _dispatchConfigured
+                          ? ZeronetColors.success
+                          : ZeronetColors.warning,
+                      title: _dispatchConfigured
+                          ? 'Dispatch Endpoint Configured'
+                          : 'Dispatch Endpoint Missing',
+                      subtitle: _dispatchConfigured
+                          ? EmergencyDispatchConfig.endpoint
+                          : 'Set ZERONET_EMERGENCY_ENDPOINT with --dart-define to enable real emergency uploads.',
+                      value: _dispatchConfigured,
+                      enabled: false,
+                      onChanged: (_) {},
                     ),
                   ],
                 ),
@@ -256,6 +287,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String title,
     required String subtitle,
     required bool value,
+    bool enabled = true,
     required ValueChanged<bool> onChanged,
   }) {
     return Padding(
@@ -293,7 +325,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           Switch(
             value: value,
-            onChanged: onChanged,
+            onChanged: enabled ? onChanged : null,
           ),
         ],
       ),

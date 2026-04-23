@@ -6,16 +6,32 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/incident.dart';
 import '../models/peer_node.dart';
+import '../mesh/mesh_service.dart';
 import 'detection_engine.dart';
 import 'alert_router.dart';
 
 class SensorService extends ChangeNotifier {
+  static final String _instanceDeviceId = _generateLocalDeviceId();
+
+  static String _generateLocalDeviceId() {
+    final timestamp = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
+    final randomSuffix = Random().nextInt(0xFFFFFF).toRadixString(16).padLeft(6, '0');
+    return 'node-$timestamp-$randomSuffix';
+  }
+
+  static String _generateLocalDeviceName(String deviceId) {
+    final shortId = deviceId.length >= 4 ? deviceId.substring(deviceId.length - 4) : deviceId;
+    return 'ZERONET $shortId';
+  }
+
   late final DetectionEngine detectionEngine;
   final AlertRouter _alertRouter = AlertRouter();
+  final MeshService _meshService = MeshService();
+  final String _localDeviceId = _instanceDeviceId;
+  final String _localDeviceName = _generateLocalDeviceName(_instanceDeviceId);
 
   SensorService() {
     detectionEngine = DetectionEngine(onIncidentConfirmed: _handleIncidentConfirmed);
@@ -48,7 +64,11 @@ class SensorService extends ChangeNotifier {
         transmissionMode: _currentMode,
         type: mappedType,
      );
-     _alertRouter.transmitIncident(mockIncident, _currentMode);
+     _alertRouter.transmitIncident(
+       mockIncident,
+       currentMode: _currentMode,
+       meshPeers: meshPeers,
+     );
   }
   bool _isMonitoring = false;
   bool get isMonitoring => _isMonitoring;
@@ -70,6 +90,37 @@ class SensorService extends ChangeNotifier {
 
   List<PeerNode> _peers = [];
   List<PeerNode> get peers => _peers;
+  List<PeerNode> get meshPeers => [currentDevicePeer, ..._peers];
+  List<PeerNode> get relayPeers => _peers;
+
+  PeerNode get currentDevicePeer {
+    final hasDirectInternet =
+        _currentMode == TransmissionMode.wifi || _currentMode == TransmissionMode.satellite;
+    return PeerNode(
+      id: _localDeviceId,
+      name: 'THIS DEVICE',
+      status: _isMonitoring ? PeerStatus.online : PeerStatus.offline,
+      lastSeen: hasDirectInternet ? 'Direct internet ready' : 'Awaiting relay',
+      distanceMeters: 0,
+      signalBars: hasDirectInternet ? 4 : (_signalBars == 0 ? 1 : _signalBars),
+      isCurrentDevice: true,
+      canRelayToInternet: hasDirectInternet,
+      isPreferredRoute: hasDirectInternet,
+      capabilityLabel: hasDirectInternet ? 'DIRECT INTERNET' : 'SOURCE DEVICE',
+    );
+  }
+
+  PeerNode? get preferredInternetRelay {
+    if (_currentMode == TransmissionMode.wifi || _currentMode == TransmissionMode.satellite) {
+      return currentDevicePeer;
+    }
+    for (final peer in _peers) {
+      if (peer.isPreferredRoute) {
+        return peer;
+      }
+    }
+    return null;
+  }
 
   int get blePeerCount => _peers.length;
 
@@ -84,9 +135,11 @@ class SensorService extends ChangeNotifier {
   StreamSubscription? _positionSub;
   StreamSubscription? _batterySub;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-  StreamSubscription<List<ScanResult>>? _scanSub;
   
   final Battery _battery = Battery();
+
+  bool get _hasDirectInternet =>
+      _currentMode == TransmissionMode.wifi || _currentMode == TransmissionMode.satellite;
 
   String _formatLocationLabel(double latitude, double longitude, Placemark place) {
     final label = '${place.name}, ${place.locality}'.trim();
@@ -98,16 +151,51 @@ class SensorService extends ChangeNotifier {
     }
     return 'Lat: ${latitude.toStringAsFixed(2)}, Lng: ${longitude.toStringAsFixed(2)}';
   }
+
+  List<PeerNode> _decorateRelayCapabilities(List<PeerNode> rawPeers) {
+    final sortedPeers = [...rawPeers]
+      ..sort((a, b) {
+        final scoreA = (a.canRelayToInternet ? 100 : 0) + a.signalBars - a.distanceMeters;
+        final scoreB = (b.canRelayToInternet ? 100 : 0) + b.signalBars - b.distanceMeters;
+        return scoreB.compareTo(scoreA);
+      });
+
+    String? preferredId;
+    for (final peer in sortedPeers) {
+      if (peer.canRelayToInternet) {
+        preferredId = peer.id;
+        break;
+      }
+    }
+
+    return sortedPeers
+        .map(
+          (peer) => peer.copyWith(
+            isPreferredRoute: peer.id == preferredId,
+            capabilityLabel: peer.canRelayToInternet ? 'INTERNET RELAY' : 'BLE RELAY',
+          ),
+        )
+        .toList();
+  }
   
   Future<void> initialize() async {
     // Check initial battery
     _batteryPercent = await _battery.batteryLevel;
     notifyListeners();
-    
-    // Check initial connectivity
+
+    _meshService.configureLocalNode(
+      deviceId: _localDeviceId,
+      deviceName: _localDeviceName,
+      hasInternetConnection: false,
+    );
+    _meshService.setPeerUpdateListener((peers) {
+      _peers = _decorateRelayCapabilities(peers);
+      notifyListeners();
+    });
+
     final connectivityResults = await Connectivity().checkConnectivity();
     _updateConnectivity(connectivityResults);
-    
+
     await requestPermissions();
     startMonitoring();
   }
@@ -195,52 +283,10 @@ class SensorService extends ChangeNotifier {
     // Connectivity
     _connectivitySub = Connectivity().onConnectivityChanged.listen(_updateConnectivity);
 
-    // Bluetooth
-    if (FlutterBluePlus.isScanningNow) {
-      await FlutterBluePlus.stopScan();
-    }
-    
     try {
-      _scanSub = FlutterBluePlus.onScanResults.listen((results) {
-        _peers = results.map((r) {
-          // Determine status based on signal strength (RSSI)
-          PeerStatus status = PeerStatus.online;
-          if (r.rssi < -80) {
-            status = PeerStatus.warning;
-          }
-          
-          // Estimate distance (simple logic: -30 to -100 dBm map to 1-100m)
-          int distance = (r.rssi.abs() - 30).clamp(1, 100);
-          
-          // Map RSSI to signal bars (1-4)
-          int bars = 1;
-          if (r.rssi > -60) {
-            bars = 4;
-          } else if (r.rssi > -75) {
-            bars = 3;
-          } else if (r.rssi > -90) {
-            bars = 2;
-          }
-
-          String deviceName = r.device.platformName.isNotEmpty 
-              ? r.device.platformName 
-              : 'NODE-${r.device.remoteId.toString().substring(0, 4)}';
-
-          return PeerNode(
-            id: r.device.remoteId.toString(),
-            name: deviceName.toUpperCase(),
-            status: status,
-            lastSeen: 'Just now',
-            distanceMeters: distance,
-            signalBars: bars,
-          );
-        }).toList();
-        
-        notifyListeners();
-      });
-      await FlutterBluePlus.startScan(timeout: const Duration(minutes: 5));
+      await _meshService.startMesh();
     } catch (e) {
-      debugPrint("BT Scan Error: $e");
+      debugPrint("BT Mesh Error: $e");
     }
   }
 
@@ -250,9 +296,13 @@ class SensorService extends ChangeNotifier {
     _positionSub?.cancel();
     _batterySub?.cancel();
     _connectivitySub?.cancel();
-    _scanSub?.cancel();
-    FlutterBluePlus.stopScan();
+    _meshService.stopMesh();
+    _peers = [];
     notifyListeners();
+  }
+
+  Future<void> refreshMeshDiscovery() async {
+    await _meshService.refreshDiscovery();
   }
   
   void _updateConnectivity(List<ConnectivityResult> results) {
@@ -269,6 +319,7 @@ class SensorService extends ChangeNotifier {
        _currentMode = TransmissionMode.offlineCached;
        _signalBars = 0;
      }
+     _meshService.updateLocalInternetAvailability(_hasDirectInternet);
      notifyListeners();
   }
 

@@ -11,7 +11,15 @@ class PeersScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final sensorService = context.watch<SensorService>();
-    final peers = sensorService.peers;
+    final peers = sensorService.meshPeers;
+    final relayPeers = sensorService.relayPeers;
+    final currentDevice = sensorService.currentDevicePeer;
+    final preferredGateway = sensorService.preferredInternetRelay;
+    final gatewayLabel = preferredGateway == null
+        ? 'No internet relay'
+        : preferredGateway.isCurrentDevice
+            ? 'Direct internet on this device'
+            : '${preferredGateway.name} can forward location';
 
     return Scaffold(
       backgroundColor: ZeronetColors.background,
@@ -50,7 +58,7 @@ class PeersScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Local network relay status.',
+                          'Local network relay status and internet handoff.',
                           style: TextStyle(
                             fontSize: 14,
                             color: ZeronetColors.textTertiary,
@@ -70,9 +78,8 @@ class PeersScreen extends StatelessWidget {
                       ),
                     ),
                     child: IconButton(
-                      onPressed: () {
-                        context.read<SensorService>().stopMonitoring();
-                        context.read<SensorService>().startMonitoring();
+                      onPressed: () async {
+                        await context.read<SensorService>().refreshMeshDiscovery();
                       },
                       icon: Icon(
                         Icons.refresh_rounded,
@@ -86,7 +93,11 @@ class PeersScreen extends StatelessWidget {
               const SizedBox(height: 12),
               // Graph Visualization
               Center(
-                child: MeshGraph(peers: peers, size: 220),
+                child: MeshGraph(
+                  currentDevice: currentDevice,
+                  peers: relayPeers,
+                  size: 220,
+                ),
               ),
               const SizedBox(height: 12),
               // Status card
@@ -117,11 +128,22 @@ class PeersScreen extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'CONNECTED',
+                            preferredGateway == null ? 'MESH ONLY' : 'ROUTE READY',
                             style: ZeronetTheme.mono.copyWith(
                               fontSize: 20,
                               fontWeight: FontWeight.w800,
-                              color: ZeronetColors.success,
+                              color: preferredGateway == null
+                                  ? ZeronetColors.warning
+                                  : ZeronetColors.success,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            gatewayLabel,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: ZeronetColors.textSecondary,
+                              height: 1.3,
                             ),
                           ),
                         ],
@@ -131,7 +153,7 @@ class PeersScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          'ACTIVE PEERS',
+                          'MESH NODES',
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -156,7 +178,7 @@ class PeersScreen extends StatelessWidget {
               const SizedBox(height: 28),
               // Nearby relays section
               Text(
-                'NEARBY RELAYS',
+                'THIS DEVICE + RELAYS',
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,

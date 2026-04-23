@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 enum IncidentType { crash, fall, manual, falseAlarm }
@@ -30,6 +31,52 @@ class Incident {
     this.latitude,
     this.longitude,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'type': type.name,
+      'timestamp': timestamp.toIso8601String(),
+      'locationName': locationName,
+      'maxGForce': maxGForce,
+      'transmissionMode': transmissionMode.name,
+      'resolved': resolved,
+      'videoClipUrl': videoClipUrl,
+      'sensorLog': sensorLog?.map((entry) => entry.toMap()).toList(),
+      'latitude': latitude,
+      'longitude': longitude,
+    };
+  }
+
+  factory Incident.fromMap(Map<String, dynamic> map) {
+    return Incident(
+      id: map['id']?.toString() ?? '',
+      type: IncidentType.values.firstWhere(
+        (value) => value.name == map['type'],
+        orElse: () => IncidentType.manual,
+      ),
+      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
+      locationName: map['locationName']?.toString() ?? 'Unknown Location',
+      maxGForce: (map['maxGForce'] as num?)?.toDouble() ?? 0,
+      transmissionMode: TransmissionMode.values.firstWhere(
+        (value) => value.name == map['transmissionMode'],
+        orElse: () => TransmissionMode.offlineCached,
+      ),
+      resolved: map['resolved'] as bool? ?? false,
+      videoClipUrl: map['videoClipUrl']?.toString(),
+      sensorLog: (map['sensorLog'] as List<dynamic>?)
+          ?.map((entry) => SensorLogEntry.fromMap(Map<String, dynamic>.from(entry as Map)))
+          .toList(),
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+    );
+  }
+
+  String toJson() => json.encode(toMap());
+
+  factory Incident.fromJson(String source) => Incident.fromMap(
+        Map<String, dynamic>.from(json.decode(source) as Map),
+      );
 
   String get typeLabel {
     switch (type) {
@@ -85,4 +132,22 @@ class SensorLogEntry {
     this.latitude,
     this.longitude,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'timestamp': timestamp.toIso8601String(),
+      'gForce': gForce,
+      'latitude': latitude,
+      'longitude': longitude,
+    };
+  }
+
+  factory SensorLogEntry.fromMap(Map<String, dynamic> map) {
+    return SensorLogEntry(
+      timestamp: DateTime.tryParse(map['timestamp']?.toString() ?? '') ?? DateTime.now(),
+      gForce: (map['gForce'] as num?)?.toDouble() ?? 0,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+    );
+  }
 }

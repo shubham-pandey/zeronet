@@ -9,6 +9,9 @@ class PeerCard extends StatelessWidget {
   const PeerCard({super.key, required this.peer});
 
   Color get _statusColor {
+    if (peer.isCurrentDevice) {
+      return ZeronetColors.primary;
+    }
     switch (peer.status) {
       case PeerStatus.online:
         return ZeronetColors.success;
@@ -21,6 +24,12 @@ class PeerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final badgeColor = peer.isPreferredRoute
+        ? ZeronetColors.primary
+        : peer.canRelayToInternet
+            ? ZeronetColors.success
+            : ZeronetColors.surfaceBorder;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -87,6 +96,26 @@ class PeerCard extends StatelessWidget {
                     letterSpacing: 0.8,
                   ),
                 ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: badgeColor.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: badgeColor.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Text(
+                    peer.isPreferredRoute ? 'PREFERRED ROUTE' : peer.capabilityLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: peer.isPreferredRoute ? ZeronetColors.primary : badgeColor,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -95,7 +124,7 @@ class PeerCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '${peer.distanceMeters}m',
+                peer.isCurrentDevice ? 'LOCAL' : '${peer.distanceMeters}m',
                 style: ZeronetTheme.mono.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
