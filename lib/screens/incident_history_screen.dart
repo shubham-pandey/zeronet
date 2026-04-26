@@ -1,12 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/incident.dart';
+import '../models/api_response_models.dart';
+import '../services/incidents_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/incident_card.dart';
 
-class IncidentHistoryScreen extends StatelessWidget {
+class IncidentHistoryScreen extends StatefulWidget {
   const IncidentHistoryScreen({super.key});
 
-  // Demo data
+  @override
+  State<IncidentHistoryScreen> createState() => _IncidentHistoryScreenState();
+}
+
+class _IncidentHistoryScreenState extends State<IncidentHistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Fetch incidents from API when screen loads
+    Future.microtask(() {
+      final service = context.read<IncidentsService>();
+      service.getIncidents();
+    });
+  }
+
+  // Demo data fallback
   List<Incident> get _demoIncidents => [
         Incident(
           id: '1',
@@ -37,53 +55,41 @@ class IncidentHistoryScreen extends StatelessWidget {
         ),
       ];
 
-  @override
-  Widget build(BuildContext context) {
-    final incidents = _demoIncidents;
-
-    return Scaffold(
-      backgroundColor: ZeronetColors.background,
-      body: SafeArea(
-        child: incidents.isEmpty ? _buildEmptyState() : _buildList(incidents),
-      ),
+  Incident _apiIncidentToIncident(ApiIncident apiIncident) {
+    return Incident(
+      id: apiIncident.id,
+      type: IncidentType.manual,
+      timestamp: apiIncident.createdAt,
+      locationName: apiIncident.location,
+      maxGForce: 2.0,
+      transmissionMode: TransmissionMode.wifi,
+      resolved: apiIncident.status == 'resolved',
+      latitude: apiIncident.latitude,
+      longitude: apiIncident.longitude,
     );
   }
 
-  Widget _buildList(List<Incident> incidents) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 24),
-          Text(
-            'INCIDENT HISTORY',
-            style: TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w900,
-              color: ZeronetColors.textPrimary,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Chronological record of events.',
-            style: TextStyle(
-              fontSize: 14,
-              color: ZeronetColors.textTertiary,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Expanded(
-            child: ListView.builder(
-              itemCount: incidents.length,
-              physics: const BouncingScrollPhysics(),
-              itemBuilder: (context, index) {
-                return IncidentCard(incident: incidents[index]);
-              },
-            ),
-          ),
-        ],
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: ZeronetColors.background,
+      body: SafeArea(
+        child: Consumer<IncidentsService>(
+          builder: (context, incidentsService, _) {
+            final apiIncidents = incidentsService.incidents;
+            final incidents = apiIncidents.isNotEmpty
+                ? apiIncidents.map(_apiIncidentToIncident).toList()
+                : _demoIncidents;
+
+            if (incidentsService.isLoading && apiIncidents.isEmpty) {
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            return incidents.isEmpty ? _buildEmptyState() : _buildList(incidents, incidentsService);
+          },
+        ),
       ),
     );
   }
@@ -94,25 +100,78 @@ class IncidentHistoryScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
-            Icons.verified_user_rounded,
+            Icons.history_rounded,
             size: 64,
-            color: ZeronetColors.primary.withValues(alpha: 0.3),
+            color: ZeronetColors.textTertiary.withValues(alpha: 0.3),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           Text(
-            'No incidents',
+            'No incidents yet',
             style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: ZeronetColors.textSecondary,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: ZeronetColors.textTertiary,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Stay safe out there.',
+            'Your incident history will appear here',
+            style: TextStyle(
+              fontSize: 14,
+              color: ZeronetColors.textTertiary.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildList(List<Incident> incidents, IncidentsService service) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'HISTORY',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  color: ZeronetColors.textPrimary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              if (service.isLoading)
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation(ZeronetColors.primary),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'All reported and resolved incidents',
             style: TextStyle(
               fontSize: 14,
               color: ZeronetColors.textTertiary,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Expanded(
+            child: ListView.separated(
+              itemCount: incidents.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final incident = incidents[index];
+                return IncidentCard(incident: incident);
+              },
             ),
           ),
         ],

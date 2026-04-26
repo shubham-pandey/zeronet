@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'services/sensor_service.dart';
+import 'services/auth_service.dart';
+import 'services/user_service.dart';
+import 'services/incidents_service.dart';
+import 'services/responders_service.dart';
+import 'services/dashboard_service.dart';
+import 'services/broadcast_service.dart';
+import 'services/heatmap_service.dart';
 import 'theme/app_theme.dart';
+import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/incident_history_screen.dart';
 import 'screens/peers_screen.dart';
@@ -19,10 +27,27 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Initialize all services
+  AuthService().initialize();
+  UserService().initialize();
+  IncidentsService().initialize();
+  RespondersService().initialize();
+  DashboardService().initialize();
+  BroadcastService().initialize();
+  HeatmapService().initialize();
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => SensorService()..initialize()),
+        ChangeNotifierProvider(create: (_) => AuthService()),
+        ChangeNotifierProvider(create: (_) => UserService()),
+        ChangeNotifierProvider(create: (_) => IncidentsService()),
+        ChangeNotifierProvider(create: (_) => RespondersService()),
+        ChangeNotifierProvider(create: (_) => DashboardService()),
+        ChangeNotifierProvider(create: (_) => BroadcastService()),
+        ChangeNotifierProvider(create: (_) => HeatmapService()),
       ],
       child: const ZeronetApp(),
     ),
@@ -38,7 +63,18 @@ class ZeronetApp extends StatelessWidget {
       title: 'Zeronet',
       debugShowCheckedModeBanner: false,
       theme: ZeronetTheme.darkTheme,
-      home: const AppShell(),
+      home: Consumer<AuthService>(
+        builder: (context, authService, _) {
+          if (authService.isAuthenticated) {
+            return const AppShell();
+          } else {
+            return const LoginScreen();
+          }
+        },
+      ),
+      routes: {
+        '/home': (context) => const AppShell(),
+      },
     );
   }
 }
